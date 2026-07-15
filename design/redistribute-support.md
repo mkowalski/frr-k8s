@@ -35,7 +35,7 @@ OpenShift's BGP-based VIP management plans to use this pattern in production and
 - Redistributing other protocols (connected, static, kernel, OSPF). The API leaves room for them.
 - Import policy or route modification (communities, med) for redistributed routes.
 - Managing the kernel table content. That is the user's agent's job.
-- VRF routers. Deferred until FRR's per-VRF `import-table` semantics are verified and we actually need that.
+- VRF routers. Deferred we actually need that.
 
 ## Proposal
 
