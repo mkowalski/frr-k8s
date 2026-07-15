@@ -79,6 +79,9 @@ Fields:
 - `protocol`: only `table-direct` initially. Enum, extensible.
 - `table`: kernel table id. Required for `table-direct`.
 - `allowedPrefixes`: prefixes permitted to leave. Required. No implicit "all".
+  Matching is exact: `192.168.111.0/24` matches only the /24 route itself, not
+  contained /32s. Range selectors (`le`/`ge`, as in `toReceive.allowed.prefixes`)
+  are a possible future extension.
 
 ### Dual-stack
 
@@ -89,7 +92,8 @@ A family with no prefixes renders nothing. No validation against neighbor famili
 
 ### Generated FRR Configuration
 
-Names are scoped by VRF and family: `redistribute-<vrf>-<table>-<family>`. Initially always `default`.
+Names are scoped by VRF and family: `redistribute-<vrf>-<table>-<family>`.
+An empty `vrf` field maps to the literal `default` (never an empty name segment). Initially always `default`.
 The VRF placeholder future-proofs the naming for VRF support.
 
 ```
