@@ -79,28 +79,49 @@ Fields:
 - `table`: kernel table id. Required for `table-direct`.
 - `allowedPrefixes`: prefixes permitted to leave. Required. No implicit "all".
 
+### Dual-stack
+
+`allowedPrefixes` may mix IPv4 and IPv6. The renderer splits them by family.
+Each family gets its own route-map, prefix-list and `address-family` block.
+A family with no prefixes renders nothing. No validation against neighbor families is needed.
+`table-direct` supports both families in FRR.
+
 ### Generated FRR Configuration
+
+Names are scoped by VRF and family: `redistribute-<vrf>-<table>-<family>`.
+Route-maps and prefix-lists are global in FRR.
+Scoping prevents collisions when different VRFs redistribute the same table id.
 
 ```
 ip import-table 198
 router bgp 64512
  address-family ipv4 unicast
-  redistribute table-direct 198 route-map redistribute-198-ipv4
-route-map redistribute-198-ipv4 permit 1
- match ip address prefix-list redistribute-198-allowed-ipv4
-route-map redistribute-198-ipv4 deny 2
-ip prefix-list redistribute-198-allowed-ipv4 seq 1 permit 192.168.111.4/32
-ip prefix-list redistribute-198-allowed-ipv4 seq 2 permit 192.168.111.5/32
+  redistribute table-direct 198 route-map redistribute-default-198-ipv4
+route-map redistribute-default-198-ipv4 permit 1
+ match ip address prefix-list redistribute-default-198-allowed-ipv4
+route-map redistribute-default-198-ipv4 deny 2
+ip prefix-list redistribute-default-198-allowed-ipv4 seq 1 permit 192.168.111.4/32
+ip prefix-list redistribute-default-198-allowed-ipv4 seq 2 permit 192.168.111.5/32
 ```
 
-Egress: the same `allowedPrefixes` are appended as permit entries to each neighbor's generated `-out` route-map.
-`toAdvertise` semantics for declared prefixes stay unchanged.
+IPv6 prefixes render the same under `address-family ipv6 unicast`, with `ipv6 prefix-list` and `-ipv6` names.
 
-Neighbors with `mode: all` also advertise redistributed routes.
-Neighbors with explicit `allowed.prefixes` do not, unless the prefixes overlap.
+Egress: the `allowedPrefixes` permits are appended **only** to the `-out` route-maps of neighbors with `toAdvertise.allowed.mode: all`.
+Neighbors with explicit `allowed.prefixes` are untouched.
+They advertise a redistributed prefix only if it is also in their own allow-list.
+`toAdvertise` semantics for declared prefixes stay unchanged.
 
 Note: `zebra` needs `ip import-table <n>` for `redistribute table-direct <n>` to see the table.
 The renderer emits it automatically.
+The IPv6 zebra visibility path will be verified during implementation and covered by a dual-stack e2e.
+
+### Validation
+
+- Reject `table` outside 1-252.
+- Reject empty `allowedPrefixes`.
+- Reject duplicate `table` entries within one router.
+- The same table in different VRFs is legal. Scoped names keep it collision-free.
+- Merge across FRRConfigurations: union of `allowedPrefixes` per (vrf, table).
 
 ## Alternatives Considered
 
