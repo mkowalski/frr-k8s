@@ -35,6 +35,7 @@ OpenShift's BGP-based VIP management plans to use this pattern in production and
 - Redistributing other protocols (connected, static, kernel, OSPF). The API leaves room for them.
 - Import policy or route modification (communities, med) for redistributed routes.
 - Managing the kernel table content. That is the user's agent's job.
+- VRF routers. Deferred until FRR's per-VRF `import-table` semantics are verified and we actually need that.
 
 ## Proposal
 
@@ -88,12 +89,10 @@ A family with no prefixes renders nothing. No validation against neighbor famili
 
 ### Generated FRR Configuration
 
-Names are scoped by VRF and family: `redistribute-<vrf>-<table>-<family>`.
-Route-maps and prefix-lists are global in FRR.
-Scoping prevents collisions when different VRFs redistribute the same table id.
+Names are scoped by VRF and family: `redistribute-<vrf>-<table>-<family>`. Initially always `default`.
+The VRF placeholder future-proofs the naming for VRF support.
 
 ```
-ip import-table 198
 router bgp 64512
  address-family ipv4 unicast
   redistribute table-direct 198 route-map redistribute-default-198-ipv4
@@ -107,21 +106,22 @@ ip prefix-list redistribute-default-198-allowed-ipv4 seq 2 permit 192.168.111.5/
 IPv6 prefixes render the same under `address-family ipv6 unicast`, with `ipv6 prefix-list` and `-ipv6` names.
 
 Egress: the `allowedPrefixes` permits are appended **only** to the `-out` route-maps of neighbors with `toAdvertise.allowed.mode: all`.
-Neighbors with explicit `allowed.prefixes` are untouched.
-They advertise a redistributed prefix only if it is also in their own allow-list.
+Neighbors with explicit `allowed.prefixes` are untouched. They advertise a redistributed prefix only if it is also in their own allow-list.
 `toAdvertise` semantics for declared prefixes stay unchanged.
 
-Note: `zebra` needs `ip import-table <n>` for `redistribute table-direct <n>` to see the table.
-The renderer emits it automatically.
-The IPv6 zebra visibility path will be verified during implementation and covered by a dual-stack e2e.
+`table-direct` reads the kernel table directly. No `ip import-table` is needed.
 
 ### Validation
 
-- Reject `table` outside 1-252.
+- Reject `table` outside 1-65535. This mirrors FRR's `redistribute table-direct (1-65535)`.
 - Reject empty `allowedPrefixes`.
 - Reject duplicate `table` entries within one router.
-- The same table in different VRFs is legal. Scoped names keep it collision-free.
-- Merge across FRRConfigurations: union of `allowedPrefixes` per (vrf, table).
+- Reject `redistribute` on VRF routers.
+- Merge across FRRConfigurations: union of `allowedPrefixes` per table.
+- The webhook's outgoing-prefix check (`validateOutgoingPrefixes`) must
+  accept redistributed prefixes: the union of `redistribute.allowedPrefixes`
+  joins the router's known prefixes. Otherwise a `filtered` neighbor listing
+  a redistributed prefix is falsely rejected.
 
 ## Alternatives Considered
 
