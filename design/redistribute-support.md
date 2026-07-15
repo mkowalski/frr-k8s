@@ -35,7 +35,7 @@ OpenShift's BGP-based VIP management plans to use this pattern in production and
 - Redistributing other protocols (connected, static, kernel, OSPF). The API leaves room for them.
 - Import policy or route modification (communities, med) for redistributed routes.
 - Managing the kernel table content. That is the user's agent's job.
-- VRF routers. Deferred we actually need that.
+- VRF routers. Deferred until FRR's per-VRF `table-direct` behavior is verified and we actually need that.
 
 ## Proposal
 
@@ -105,7 +105,9 @@ ip prefix-list redistribute-default-198-allowed-ipv4 seq 2 permit 192.168.111.5/
 
 IPv6 prefixes render the same under `address-family ipv6 unicast`, with `ipv6 prefix-list` and `-ipv6` names.
 
-Egress: the `allowedPrefixes` permits are appended **only** to the `-out` route-maps of neighbors with `toAdvertise.allowed.mode: all`.
+Egress: for neighbors with `toAdvertise.allowed.mode: all`, the redistributed `allowedPrefixes` are appended to the neighbor's generated allowed prefix-lists (`ToAdvertisePrefixListV4`/`V6`).
+No extra route-map clauses.
+Neighbor modifiers like `set ip next-hop` live in the main permit rule and apply uniformly.
 Neighbors with explicit `allowed.prefixes` are untouched. They advertise a redistributed prefix only if it is also in their own allow-list.
 `toAdvertise` semantics for declared prefixes stay unchanged.
 
@@ -114,11 +116,11 @@ Neighbors with explicit `allowed.prefixes` are untouched. They advertise a redis
 ### Validation
 
 - Reject `table` outside 1-65535. This mirrors FRR's `redistribute table-direct (1-65535)`.
-- Reject empty `allowedPrefixes`.
-- Reject invalid prefixes.
+- Reject empty `allowedPrefixes` or any invalid CIDR block within it.
 - Reject duplicate `table` entries within one router.
 - Reject `redistribute` on VRF routers.
 - Merge across FRRConfigurations: union of `allowedPrefixes` per table.
+  Fail the merge if the same table is declared with different protocols.
 - The webhook's outgoing-prefix check (`validateOutgoingPrefixes`) must
   accept redistributed prefixes: the union of `redistribute.allowedPrefixes`
   joins the router's known prefixes. Otherwise a `filtered` neighbor listing
