@@ -107,6 +107,7 @@ IPv6 prefixes render the same under `address-family ipv6 unicast`, with `ipv6 pr
 
 Egress: for neighbors with `toAdvertise.allowed.mode: all`, the redistributed `allowedPrefixes` are appended to the neighbor's generated allowed prefix-lists (`ToAdvertisePrefixListV4`/`V6`).
 No extra route-map clauses.
+When the neighbor has no declared prefixes, the redistributed prefixes must replace the `deny any` placeholder entry, not follow it. Prefix-lists are first-match.
 Neighbor modifiers like `set ip next-hop` live in the main permit rule and apply uniformly.
 Neighbors with explicit `allowed.prefixes` are untouched. They advertise a redistributed prefix only if it is also in their own allow-list.
 `toAdvertise` semantics for declared prefixes stay unchanged.
@@ -117,9 +118,9 @@ Neighbors with explicit `allowed.prefixes` are untouched. They advertise a redis
 
 - Reject `table` outside 1-65535. This mirrors FRR's `redistribute table-direct (1-65535)`.
 - Reject empty `allowedPrefixes` or any invalid CIDR block within it.
-- Reject duplicate `table` entries within one router.
+- Reject duplicate `(protocol, table)` pairs within one router. Future table-less protocols are not affected.
 - Reject `redistribute` on VRF routers.
-- Merge across FRRConfigurations: union of `allowedPrefixes` per table.
+- Merge across FRRConfigurations: union of `allowedPrefixes` per router and table.
   Fail the merge if the same table is declared with different protocols.
 - The webhook's outgoing-prefix check (`validateOutgoingPrefixes`) must
   accept redistributed prefixes: the union of `redistribute.allowedPrefixes`
@@ -134,4 +135,6 @@ Neighbors with explicit `allowed.prefixes` are untouched. They advertise a redis
 ## Test Plan
 
 - Unit: api_to_config coverage for the new stanza.
+- Unit: neighbor modifiers (e.g. `set ip next-hop`) apply to redistributed prefixes.
 - E2E: install route in table, expect advertisement; remove route, expect withdrawal; verify a non-allowed prefix in the table never leaves.
+- E2E: dual-stack variant (mixed v4/v6 `allowedPrefixes`).
