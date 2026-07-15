@@ -115,6 +115,7 @@ Neighbors with explicit `allowed.prefixes` are untouched. They advertise a redis
 
 - Reject `table` outside 1-65535. This mirrors FRR's `redistribute table-direct (1-65535)`.
 - Reject empty `allowedPrefixes`.
+- Reject invalid prefixes.
 - Reject duplicate `table` entries within one router.
 - Reject `redistribute` on VRF routers.
 - Merge across FRRConfigurations: union of `allowedPrefixes` per table.
